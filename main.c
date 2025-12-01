@@ -4,10 +4,76 @@
 //#include <windows.h>
 #include "rs232.h"
 #include "serial.h"
-#include "RobotInit.h"
 
 #define bdrate 115200               /* 115200 baud */
+#define MAXMOVEMENTS 50     // upper bound for movements per character
+#define MAXCHARS     128    // ASCII range (0–127)
 
+struct Instructions {
+    int x;     // X offset from origin
+    int y;     // Y offset from origin
+    int pen;   // Pen state: 0 = up, 1 = down
+};
+
+struct FontData {
+    int ascii_code;                   // ASCII value of the character
+    int num_movements;                // Number of movements
+    struct Instructions movements[MAXMOVEMENTS];  // Array of movements
+};
+struct FontData FontSet[MAXCHARS];
+int FontRead(const char *fontfilename) {
+    FILE *fontfile = fopen(fontfilename, "r");
+    if (!fontfile) {
+        printf("Error opening file: %s\n", fontfilename);
+        return 0;
+    }
+
+    int marker, ascii, n;
+    int count = 0;
+
+    // Loop until EOF
+    while (fscanf(fontfile, "%d %d %d", &marker, &ascii, &n) == 3) {
+        if (marker != 999) {
+            // ignore lines that do not contain 999 for defining new character
+            continue;
+        }
+
+        if (count >= MAXCHARS) {
+            printf("Warning: exceeded MAXCHARS limit.\n");
+            break;
+        }
+
+        FontSet[count].ascii_code = ascii;
+        FontSet[count].num_movements = n;
+
+        for (int i = 0; i < n && i < MAXMOVEMENTS; i++) {
+            fscanf(fontfile, "%d %d %d",
+                   &FontSet[count].movements[i].x,
+                   &FontSet[count].movements[i].y,
+                   &FontSet[count].movements[i].pen);
+        }
+
+        count++;
+    }
+
+    fclose(fontfile);
+    return 1;  // return success
+}
+
+int Initialisation() {
+    int Success = FontRead("SingleStrokeFont.txt");
+    if (Success)
+    {
+        printf("Font File Processed");
+        return 1;
+    }
+    else
+    {
+        printf("Failed to read Font File");
+        return 0;
+    }
+    
+}
 void SendCommands (char *buffer );
 
 int main()
@@ -31,8 +97,19 @@ int main()
      // printf ("Buffer to send: %s", buffer); // For diagnostic purposes only, normally comment out
     PrintBuffer (&buffer[0]);
     Sleep(100);
-    Initialisation();
-    printf("Character %c has %d movements.\n", FontSet[65].ascii_code, FontSet[65].num_movements);
+
+    Initialisation(); // Initialse program for font data
+    printf("Character: H (ASCII %d)\n",FontSet[72].ascii_code );
+            printf("Number of movements: %d\n", FontSet[72].num_movements);
+
+            for (int j = 0; j < FontSet[72].num_movements; j++) {
+                printf("  Movement %d: x=%d, y=%d, pen=%d\n",
+                       j,
+                       FontSet[72].movements[j].x,
+                       FontSet[72].movements[j].y,
+                       FontSet[72].movements[j].pen);
+            }
+
     // This is a special case - we wait  until we see a dollar ($)
     WaitForDollar();
 
