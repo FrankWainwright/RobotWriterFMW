@@ -26,12 +26,15 @@ struct FontData     //Structure of the font header with nested structure of inst
 };
 struct FontData FontSet[MAXCHARS];      //Populating the structure with spaces for every ascii character
 int *TextInput = NULL;      //Array of ascii values in text file
-int TextLength = 0;         //Length of text in file to appropriately allocate TextInput array size
-
+int TextLength;         //Length of the text in the TextArray
+int NextWord[64];          //Array of ascii values comprising the next word to be translated into commands
+int WordLength;         //Length of text in file to appropriately allocate TextInput array size
+int WordPosition = 0;   //Current location of the start/end of a word
 void SendCommands (char *buffer );
 int FontRead(const char *fontfilename, unsigned int FontHeight);
 int Initialisation(const char *FontFile);
-int TextParse(const char *textfilename, int **AsciiArray, int *outLength);
+int TextRead(const char *textfilename, int **AsciiArray, int *outLength);
+int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength);
 
 int main()
 {
@@ -85,6 +88,17 @@ int main()
         for (int i = 0; i < TextLength; i++)
         {
             printf("%d ", TextInput[i]);
+        }
+        while (TextParse(TextInput, TextLength, &WordPosition, NextWord, &WordLength))
+        {
+        printf("Next word (%d chars): ", WordLength);
+        for (int i = 0; i < WordLength; i++)
+        {
+            if (NextWord[i] == 10) printf("[LF]");
+            else if (NextWord[i] == 13) printf("[CR]");
+            else printf("%c", NextWord[i]);
+        }
+        printf("\n");
         }
     #endif
     // These are sample commands to draw out some information - these are the ones you will be generating.
@@ -167,60 +181,11 @@ int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to lo
     fclose(fontfile);
     return 1;  // return success
 }
-
-int Initialisation(const char *FileName) //Function to handle all file read related operations at the start of the program and trap errors
+int TextRead(const char *textfilename, int **AsciiArray, int *TextLength)       //Function to read ascii values from .txt, put them in an array and format the array for ease of use
 {
-    unsigned int FontHeight = 0;        //User specified value for the height they want letters to be written at
-    char input[32];     //Buffer for user input, ensuring it doesnt break input loop
-   for (;;)     //Run forever until correct input is given
-   {
-        printf("Please input a height (in mm) between 4 and 10 for the text to be drawn at: ");
-        if (fgets(input, sizeof(input), stdin))     //Process user input
-         {
-            if (sscanf(input, "%u", &FontHeight) == 1)  //Test if the value contains an unsigned integer
-            {
-                if (FontHeight >= 4 && FontHeight <= 10)    //Test if the integer value is within specified limits
-                {
-                    break;  //End infinite loop 
-                }
-            }
-        }
-        printf("Invalid input. Please enter a whole number between 4 and 10.\n");
-    }
-
-
-    
-    if (FontRead(FileName,FontHeight))      //Read font instructions and populate structure with it
-    {
-        printf("Font File Processed \n");
-        
-    }
-    else
-    {
-        printf("Failed to read Font File \n");
-        exit(1);
-    }
-
-    if (TextParse("test.txt", &TextInput, &TextLength))     //Read text and populate array with it
-    {
-        printf("Text file processed \n"); //Confirm Sucess
-    }
-    else       
-    {
-        printf("Failed to process text file.\n"); //Confirm Error
-        exit(1);
-    }
-    return 1;
-    
-}
-
-// Function: TextParse
-// Reads characters from filename, stores ASCII values in caller-provided array.
-// Returns 1 on success, 0 on failure.
-int TextParse(const char *textfilename, int **AsciiArray, int *outLength) {
     FILE *TextFile = fopen(textfilename, "r");
     if (!TextFile) {
-        return 0;   // Return failure
+        return 0;   //Return failure
     }
 
     
@@ -254,8 +219,89 @@ int TextParse(const char *textfilename, int **AsciiArray, int *outLength) {
         *AsciiArray = resized;
     }
 
-    *outLength = count;
+    *TextLength = count;
     return 1;   //Return success
+}
+int Initialisation(const char *FileName) //Function to handle all file read related operations at the start of the program and trap errors
+{
+    unsigned int FontHeight = 0;        //User specified value for the height they want letters to be written at
+    char input[32];     //Buffer for user input, ensuring it doesnt break input loop
+   for (;;)     //Run forever until correct input is given
+   {
+        printf("Please input a height (in mm) between 4 and 10 for the text to be drawn at: ");
+        if (fgets(input, sizeof(input), stdin))     //Process user input
+         {
+            if (sscanf(input, "%u", &FontHeight) == 1)  //Test if the value contains an unsigned integer
+            {
+                if (FontHeight >= 4 && FontHeight <= 10)    //Test if the integer value is within specified limits
+                {
+                    break;  //End infinite loop 
+                }
+            }
+        }
+        printf("Invalid input. Please enter a whole number between 4 and 10.\n");
+    }
+
+
+    
+    if (FontRead(FileName,FontHeight))      //Read font instructions and populate structure with it
+    {
+        printf("Font File Processed \n");
+        
+    }
+    else
+    {
+        printf("Failed to read Font File \n");
+        exit(1);
+    }
+
+    if (TextRead("test.txt", &TextInput, &TextLength))     //Read text and populate array with it
+    {
+        printf("Text file processed \n"); //Confirm Sucess
+    }
+    else       
+    {
+        printf("Failed to process text file.\n"); //Confirm Error
+        exit(1);
+    }
+    return 1;
+    
+}
+
+int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength) 
+{
+    if (*WordPosition >= TextLength)      //Check if end of text has been reached  
+    {
+        *WordLength = 0;
+        return 0;  //Return no words left
+    }
+
+    int count = 0;  //Counter to track how many ascii values have been counted, therefore the word length
+
+    if (TextArray[*WordPosition] == 13 || TextArray[*WordPosition] == 10)       //Handles new line and carriage return implicitly
+    {
+        NextWord[count++] = TextArray[*WordPosition];
+        (*WordPosition)++;
+        *WordLength = count;
+        return 1;  //Return CR/LF as a "word" to process
+    }
+
+    while (*WordPosition < TextLength &&       //If ascii value is part of a word process it  
+           TextArray[*WordPosition] != 32 &&   //Space
+           TextArray[*WordPosition] != 13 &&   //CR
+           TextArray[*WordPosition] != 10) {   //LF
+        NextWord[count++] = TextArray[*WordPosition];       //Saving TextArray value at that point to the NextWord array
+        (*WordPosition)++;
+    }
+    if (*WordPosition < TextLength &&     //Skip past special characters after they have been identified earlier  
+        (TextArray[*WordPosition] == 32 ||
+         TextArray[*WordPosition] == 13 ||
+         TextArray[*WordPosition] == 10)) {
+        (*WordPosition)++;
+    }
+
+    *WordLength = count;        //Set WordLength to the amount of ascii values processed in current word
+    return 1;  //Retun success/ new word
 }
 
 
