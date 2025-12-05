@@ -7,9 +7,9 @@
 #include "RobotCommand.h"   //Header for external file for robot commands (functions used inside loop)
 
 int NextWord[64];          //Array of ascii values comprising the next word to be translated into commands
-int WordLength;         //Length of text in file to appropriately allocate TextInput array size
-int WordPosition = 0;   //Current location of the start/end of a word
+int WordLength;         //Length of word   
 unsigned int TrailingSpaces;        //How many spaces are after the current word
+FILE *TextFile;
 
 // Send the data to the robot - note in 'PC' mode you need to hit space twice
 // as the dummy 'WaitForReply' has a getch() within the function.
@@ -21,64 +21,88 @@ void SendCommands (char *buffer )
     WaitForReply();
     Sleep(100); // Can omit this when using the writing robot but has minimal effect
 }
-int TextParse(const int *TextArray, int TextLength,int *WordPosition, int *NextWord, int *WordLength, unsigned int *TrailingSpaces)       //Function to seperate TextArray into words that can be processed into GCode commands
+int TextReadWord(const char *TextFileName,FILE **TextFile,int *NextWord,int *WordLength,unsigned int *TrailingSpaces)       //Function to read text.txt word by word and write the word to the Nextword array
 {
-    if (*WordPosition >= TextLength)      //Check if end of text has been reached  
+    if (*TextFile == NULL) //If file pointer is not yet pointing to a filestream
     {
-        *WordLength = 0;
-        *TrailingSpaces = 0;       
-        return 0;  //Return no word / Failure
+        *TextFile = fopen(TextFileName, "r");       //Opens file stream and assigns to pointer
+        if (!*TextFile)     //If text file could not be opened
+        {
+            printf("Failed to read file \n");
+            exit(1);        //End program
+        }
     }
 
-    int count = 0;  //Counter to track how many ascii values have been counted, therefore the word length
-    *TrailingSpaces = 0;    //Reseting trailing spaces for each word
+    int ch;     //Temporary character storage
+    int count = 0;      //Temporary counter
+    *TrailingSpaces = 0;    //Resetting trailing spaces for new word
 
-    if (TextArray[*WordPosition] == 13)     //If CR is in word
-    { 
-    NextWord[count++] = 13; //Store CR
-    (*WordPosition)++;
-    if (*WordPosition < TextLength && TextArray[*WordPosition] == 10) //If LF follows
-    { 
-        NextWord[count++] = 10; //Store LF
-        (*WordPosition)++;
-        
-    }
-    *WordLength = count; 
-      
-    return 1; //Return new word / Success
-    }
-    else if (TextArray[*WordPosition] == 10) //If just LF is in word
-    { 
-    NextWord[count++] = 10; //Store LF
-    (*WordPosition)++;
-    *WordLength = count;
-    printf("Word is %d", *NextWord); 
-    return 1;   //Return new word / Success
+   
+    while ((ch = fgetc(*TextFile)) == 32)       //While the character is space
+    {
+        (*TrailingSpaces)=0;        //Increment spaces
     }
 
-    while (*WordPosition < TextLength &&       //If ascii value is part of a word process it  
-           TextArray[*WordPosition] != 32 &&   //Space
-           TextArray[*WordPosition] != 13 &&   //CR
-           TextArray[*WordPosition] != 10)     //LF
-    {   
-        NextWord[count++] = TextArray[*WordPosition];       //Saving TextArray value at that point to the NextWord array
-        (*WordPosition)++;
+    if (ch == EOF)      //If character is end of file
+    {
+        fclose(*TextFile);      //Close file stream
+        *TextFile = NULL;       //Unpoint textfile pointer
+        *WordLength = 0;        //Set no word length
+        *TrailingSpaces = 0;    //Set no spaces
+        return 0; //End of file, no more words
     }
+
+
+    if (ch == 13)       //If character is CR
+    {
+        NextWord[count++] = 13;     //Add CR value to next word array
+        ch = fgetc(*TextFile);      //Look at next character
+        if (ch == 10)       //If LF follows from CR
+        { 
+            NextWord[count++] = 10; //Add LF value to next word array
+        } else if (ch != EOF)       //If accidentally reached the end of file with the lookup
+        {
+            ungetc(ch, *TextFile);      //Remove character increment so next function call finds end of file and handles
+        }
+        *WordLength = count;        
+        return 1;       //Return success / new word 
+    }
+    else if (ch == 10)      //If character is LF
+     { 
+        NextWord[count++] = 10;     //Add LF value to next word array
+        *WordLength = count;
+        return 1;       //Return success / new word 
+    }
+
+
+    while (ch != EOF && ch != 32 && ch != 13 && ch != 10)       //Collect characters until space/CR/LF/EOF
+    {
+        NextWord[count++] = ch;     //Add ch value to next word array
+        ch = fgetc(*TextFile);      //Look at next character
+    }
+
     
-    while (*WordPosition < TextLength && TextArray[*WordPosition] == 32)    //Count the spaces left after a word
+    while (ch == 32)        //While characters are space
     {
-        (*TrailingSpaces)++;
-        (*WordPosition)++;
+        (*TrailingSpaces)++;        //Increment trailing spaces
+        ch = fgetc(*TextFile);      //Look at next character
     }
 
-    *WordLength = count;        //Set WordLength to the amount of ascii values processed in current word
-    return 1;  //Return new word / Success
+    if (ch != EOF && ch != 13 && ch != 10)      //If character is not CR/LF/EOF
+    {
+        ungetc(ch, *TextFile);      //Unget next character
+    } else if (ch == 13 || ch == 10) 
+    {
+        ungetc(ch, *TextFile);        //Leave CR/LF for next call
+    }
+
+    *WordLength = count;
+    return 1; //Success / new word
 }
 
-int GenerateGCode( int *NextWord, int WordLength, unsigned int TrailingSpaces)
+int GenerateGCode( int *NextWord, int WordLength, unsigned int TrailingSpaces)      //Function for generating GCode commands for the words passed to it
 {
     char buffer[128];
-
     if (NextWord[0] == 13 || NextWord[0] == 10)        //Processing new line / return carriage ascii values
     {
         
@@ -114,10 +138,17 @@ int GenerateGCode( int *NextWord, int WordLength, unsigned int TrailingSpaces)
     for (int i = 0; i < WordLength; i++)        //Generate G-code for each letter in the word
     {
         int ascii = NextWord[i];
-        if (ascii < 0 || ascii >= MAXCHARS) continue;       //Error handling invalid inputs
-
+        if (ascii < 0 || ascii >= MAXCHARS)
+        {
+            continue;      //Error handling invalid inputs
+        }
+        else
+        {
+            printf("Could not generate commands /N");
+            return 0;
+        }
         struct FontData letter = FontSet[ascii];    //Pulls structure data for the current letter and gives it a local label "letter"
-
+        unsigned int Down = 0; 
         for (unsigned int j = 0; j < letter.num_movements; j++)     //Iterate through each movement for the ascii value
         {
             struct Instructions move = letter.movements[j];
@@ -126,14 +157,24 @@ int GenerateGCode( int *NextWord, int WordLength, unsigned int TrailingSpaces)
                 XOffset = 0;        //Send carriage back                
                 YOffset -= LineSpacing;  // negative Y direction per spec
             }
-
+                 
             double TargetX = XOffset + move.x;     //Set X coordinate based on font instruction and continuing offset
-            double TargetY = YOffset + move.y;     //Set Y coordinate based on font instruction and continuing offset
-
+            double TargetY = YOffset + move.y;     //Set Y coordinate based on font instruction and continuing offset    
             if (move.pen == 1)      //If pen down is specified in font
             {
-                sprintf(buffer, "S1000 G1 X%f Y%f\n", TargetX, TargetY);        //Set spindle on and movement to steady while moving to position
-            } else {
+                if(!Down)
+                {
+                    Down = 1;
+                    sprintf(buffer, "S1000 G1 X%f Y%f\n", TargetX, TargetY);        //Set spindle on and movement to steady while moving to position
+                }
+                else
+                {
+                   sprintf(buffer, "G1 X%f Y%f\n", TargetX, TargetY);        //Set movement to steady while moving to position 
+                }
+            } 
+            else 
+            {
+                Down = 0;
                 sprintf(buffer, "S0 G0 X%f Y%f\n", TargetX, TargetY);           //Set spindle off and movement to rapid while moving to position
             }
             SendCommands(buffer);   //Send Commands

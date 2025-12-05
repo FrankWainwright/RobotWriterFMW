@@ -35,7 +35,7 @@ int main()
     PrintBuffer (&buffer[0]);
     Sleep(100);
 
-    Initialisation("SingleStrokeFont.txt", "Test.txt");         //Initialse program for font data
+    Initialisation("SingleStrokeFont.txt");         //Initialse program for font data
     // This is a special case - we wait  until we see a dollar ($)
     WaitForDollar();
 
@@ -49,7 +49,7 @@ int main()
     sprintf (buffer, "S0\n");
     SendCommands(buffer);
 
-    #ifdef DEBUG        //Debug value tests
+    #ifdef DEBUG        //Debug value test
         printf("Character: H (ASCII %u)\n",FontSet[72].ascii_code );
         printf("Number of movements: %u\n", FontSet[72].num_movements);
 
@@ -61,14 +61,9 @@ int main()
                        FontSet[72].movements[j].y,
                        FontSet[72].movements[j].pen);
             }
-        printf("Read %d ASCII values:\n", TextLength);
-        for (int i = 0; i < TextLength; i++)
-        {
-            printf("%d ", TextInput[i]);
-        }
     #endif
     
-    while (TextParse(TextInput, TextLength, &WordPosition, NextWord, &WordLength,&TrailingSpaces)) 
+    while (TextReadWord("Test.txt",&TextFile,NextWord, &WordLength,&TrailingSpaces)) 
     {
     
         if (WordLength > 0)     //If TextParse returns 1 when a word or CR/LF was successfully extracted
@@ -78,12 +73,12 @@ int main()
             {
             //Show debug info
             #ifdef DEBUG
-            printf("Processed word of length %d at position %d\n", WordLength, WordPosition);
+            printf("Processed word of length %d\n");
             #endif
             }
             else 
             {
-            printf("Error generating G-code for word at position %d\n", WordPosition);
+            printf("Error generating G-code for word at position");
             }
         }
     }
@@ -95,8 +90,6 @@ SendCommands(buffer);
     // Before we exit the program we need to close the COM port
     CloseRS232Port();
     printf("Com port now closed\n");
-    free(TextInput);        //Free up allocated memory
-    TextInput = NULL;       //Remove pointer address
     return (0);
 }
 

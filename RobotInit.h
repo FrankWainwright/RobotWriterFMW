@@ -23,13 +23,9 @@ struct FontData     //Structure of the font header with nested structure of inst
 extern struct FontData FontSet[MAXCHARS];  // Global font set
 extern double XOffset;                        // Offset applied from origin in X direction
 extern double YOffset;               // Offset applied from origin in Y direction
-extern int *TextInput;      //Array of ascii values in text file
-extern int TextLength;         //Length of the text in the TextArray
 extern unsigned int LineSpacing;   //Spacing between successive lines in mm
 
 int FontRead(const char *fontfilename, unsigned int FontHeight);
-int Initialisation(const char *FontFileName, const char *TextFileName);
-int TextRead(const char *textfilename, int **AsciiArray, int *outLength);
-
+int Initialisation(const char *FontFileName);
 #endif
 

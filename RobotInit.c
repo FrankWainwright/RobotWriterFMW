@@ -19,8 +19,6 @@ struct FontData     //Structure of the font header with nested structure of inst
 struct FontData FontSet[MAXCHARS];      //Populating the structure with spaces for every ascii character
 double XOffset = 0;        //Offset applied from origin in X direction
 double YOffset = 0;        //Offset applied from origin in Y direction
-int *TextInput = NULL;      //Array of ascii values in text file
-int TextLength;         //Length of the text in the TextArray
 unsigned int LineSpacing = 5;   //Spacing between successive lines in mm
 
 int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to load fontfile, and populate structure 
@@ -68,48 +66,8 @@ int FontRead(const char *fontfilename, unsigned int FontHeight) //Function to lo
     fclose(fontfile);
     return 1;  // return success
 }
-int TextRead(const char *TextFileName, int **AsciiArray, int *TextLength)       //Function to read ascii values from .txt, put them in an array and format the array for ease of use
-{
-    FILE *TextFile = fopen(TextFileName, "r");      //Open text file
-    if (!TextFile) {
-        return 0;   //Return failure
-    }
 
-    
-    fseek(TextFile, 0, SEEK_END);     //Seek the end of the file
-    long fileSize = ftell(TextFile);      //Assign filesize based on end of file
-    rewind(TextFile);
-
-    
-    *AsciiArray = malloc(fileSize * sizeof(int));       //Create Array based on the size of the file
-    if (!*AsciiArray) {
-        fclose(TextFile);
-        return 0;       //Return failure
-    }
-
-    int count = 0;
-    int ch;
-    while ((ch = fgetc(TextFile)) != EOF)     //Iterating through all characters
-    {
-        (*AsciiArray)[count++] = ch;        //Inputting ascii characters into the array
-    }
-    fclose(TextFile);       //Close file stream
-
-    
-    while (count > 0 && isspace((*AsciiArray)[count - 1]))      //Removing empty space from array to make parsing easier
-    {
-        count--;
-    }
-
-    int *resized = realloc(*AsciiArray, count * sizeof(int));       //Freeing unused memory
-    if (resized) {
-        *AsciiArray = resized;
-    }
-
-    *TextLength = count;
-    return 1;   //Return success
-}
-int Initialisation(const char *FontFileName, const char *TextFileName) //Function to handle all file read related operations at the start of the program and trap errors
+int Initialisation(const char *FontFileName) //Function to handle all font related operations at the start of the program and trap errors
 {
     unsigned int FontHeight = 0;        //User specified value for the height they want letters to be written at
     char input[32];     //Buffer for user input, ensuring it doesnt break input loop
@@ -141,16 +99,5 @@ int Initialisation(const char *FontFileName, const char *TextFileName) //Functio
         printf("Failed to read Font File \n");
         exit(1);
     }
-
-    if (TextRead(TextFileName, &TextInput, &TextLength))     //Read text and populate array with it
-    {
-        printf("Text file processed \n"); //Confirm Sucess
-    }
-    else       
-    {
-        printf("Failed to process text file.\n"); //Confirm Error
-        exit(1);
-    }
-    return 1;
-    
+    return 1;   //Return Success
 }
